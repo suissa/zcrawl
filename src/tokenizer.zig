@@ -423,7 +423,7 @@ pub const Tokenizer = struct {
                             },
                         }
                     } else {
-                        self.emitCurrentTagAndEof();
+                        self.emitToken(Token.EndOfFile);
                         return ParseError.EofInTag;
                     }
                 },
@@ -1095,7 +1095,7 @@ pub const Tokenizer = struct {
                             },
                         }
                     } else {
-                        self.emitCurrentTagAndEof();
+                        self.emitToken(Token.EndOfFile);
                         return ParseError.EofInTag;
                     }
                 },
@@ -1147,7 +1147,7 @@ pub const Tokenizer = struct {
                             },
                         }
                     } else {
-                        self.emitCurrentTagAndEof();
+                        self.emitToken(Token.EndOfFile);
                         return ParseError.EofInTag;
                     }
                 },
@@ -1171,7 +1171,7 @@ pub const Tokenizer = struct {
                             },
                         }
                     } else {
-                        self.emitCurrentTagAndEof();
+                        self.emitToken(Token.EndOfFile);
                         return ParseError.EofInTag;
                     }
                 },
@@ -1204,7 +1204,7 @@ pub const Tokenizer = struct {
                             },
                         }
                     } else {
-                        self.emitCurrentTagAndEof();
+                        self.emitToken(Token.EndOfFile);
                         return ParseError.EofInTag;
                     }
                 },
@@ -1230,7 +1230,7 @@ pub const Tokenizer = struct {
                             },
                         }
                     } else {
-                        self.emitCurrentTagAndEof();
+                        self.emitToken(Token.EndOfFile);
                         return ParseError.EofInTag;
                     }
                 },
@@ -1251,7 +1251,7 @@ pub const Tokenizer = struct {
                             },
                         }
                     } else {
-                        self.emitCurrentTagAndEof();
+                        self.emitToken(Token.EndOfFile);
                         return ParseError.EofInTag;
                     }
                 },
@@ -2296,14 +2296,6 @@ pub const Tokenizer = struct {
             return token;
         }
         unreachable;
-    }
-
-    /// Complete a tag that was cut off by EOF, then queue EOF after it.
-    /// The caller reports EofInTag after the emitted tokens have been queued.
-    fn emitCurrentTagAndEof(self: *Self) void {
-        self.state = .Data;
-        self.emitToken(self.currentToken.complete(self));
-        self.emitToken(Token.EndOfFile);
     }
 
     pub fn emitToken(self: *Self, token: Token) void {

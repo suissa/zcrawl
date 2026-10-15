@@ -1,9 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
-const zhtml = @import("zhtml");
-const Token = zhtml.Token;
-const Tokenizer = zhtml.Tokenizer;
-const ParseError = zhtml.ParseError;
+const Token = @import("token.zig").Token;
+const Tokenizer = @import("tokenizer").Tokenizer;
+const ParseError = @import("parse_error.zig").ParseError;
 
 // FIXME: This whole file is rather sloppy with memory
 // TODO: Preprocessing the input stream (spec 12.2.3.5)
@@ -399,7 +398,7 @@ const ErrorInfo = struct {
 
 test "ErrorInfo.errorToSpecId" {
     const actual = ErrorInfo.errorToSpecId(ParseError.EofInDOCTYPE);
-    std.debug.print("ErrorInfo.errorToSpecId: expected=eof-in-doctype actual={s}\\n", .{actual});
+    std.debug.print("ErrorInfo.errorToSpecId: expected=eof-in-doctype actual={s}\n", .{actual});
     try testing.expectEqualSlices(u8, "eof-in-doctype", actual);
-    std.debug.print("Completed ErrorInfo.errorToSpecId\\n", .{});
+    std.debug.print("Completed ErrorInfo.errorToSpecId\n", .{});
 }

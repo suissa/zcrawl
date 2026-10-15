@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
 
     // Public package module. Consumers should import this as:
     // const zcrawl = @import("zcrawl");
-    const zcrawl_module = b.addModule("zcrawl", .{
+    _ = b.addModule("zcrawl", .{
         .root_source_file = b.path("src/lib.zig"),
         .target = target,
         .optimize = optimize,

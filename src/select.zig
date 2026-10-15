@@ -15,10 +15,14 @@ fn asciiEqlIgnoreCase(a: []const u8, b: []const u8) bool {
 /// Only tag/class/id/universal compounds are supported, joined by
 /// descendant combinators (whitespace) between compounds — enough to cover
 /// cheerio's most common selector usage.
+const Combinator = enum { descendant, child };
+
 const Compound = struct {
     tag: ?[]const u8 = null,
     id: ?[]const u8 = null,
     classes: []const []const u8 = &.{},
+    /// Relationship between this compound and the compound immediately before it.
+    combinator: Combinator = .descendant,
 
     fn matches(self: Compound, node: *const dom.Node) bool {
         if (node.isText()) return false;
@@ -39,10 +43,31 @@ const Compound = struct {
 /// descendant `Compound`s, ordered outer-to-inner.
 fn parseChain(allocator: mem.Allocator, selector: []const u8) ![]Compound {
     var compounds = ArrayList(Compound).init(allocator);
-    var it = mem.tokenizeScalar(u8, selector, ' ');
-    while (it.next()) |part| {
-        try compounds.append(try parseCompound(allocator, part));
+    var i: usize = 0;
+    var next_combinator: Combinator = .descendant;
+
+    while (i < selector.len) {
+        while (i < selector.len and std.ascii.isWhitespace(selector[i])) : (i += 1) {}
+        if (i >= selector.len) break;
+
+        if (selector[i] == '>') {
+            if (compounds.items.len == 0 or next_combinator == .child) return error.InvalidSelector;
+            next_combinator = .child;
+            i += 1;
+            continue;
+        }
+
+        const start = i;
+        while (i < selector.len and !std.ascii.isWhitespace(selector[i]) and selector[i] != '>') : (i += 1) {}
+        if (start == i) return error.InvalidSelector;
+
+        var compound = try parseCompound(allocator, selector[start..i]);
+        compound.combinator = next_combinator;
+        try compounds.append(compound);
+        next_combinator = .descendant;
     }
+
+    if (compounds.items.len == 0 or next_combinator == .child) return error.InvalidSelector;
     return compounds.toOwnedSlice();
 }
 
@@ -78,18 +103,33 @@ fn parseCompound(allocator: mem.Allocator, part: []const u8) !Compound {
 /// compounds in `chain[0 .. chain.len - 1]`, in order — i.e. standard CSS
 /// descendant-combinator matching.
 fn matchesChain(node: *const dom.Node, chain: []const Compound, boundary: ?*const dom.Node) bool {
-    if (chain.len == 0) return true;
+    if (chain.len == 0) return false;
     if (!chain[chain.len - 1].matches(node)) return false;
 
-    var remaining = chain[0 .. chain.len - 1];
+    var index = chain.len - 1;
     var ancestor = node.parent;
-    while (remaining.len > 0) {
-        const current = ancestor orelse return false;
-        if (boundary != null and current == boundary.?) return false;
-        if (remaining[remaining.len - 1].matches(current)) {
-            remaining = remaining[0 .. remaining.len - 1];
+    while (index > 0) {
+        if (chain[index].combinator == .child) {
+            const current = ancestor orelse return false;
+            if (boundary != null and current == boundary.?) return false;
+            if (!chain[index - 1].matches(current)) return false;
+            ancestor = current.parent;
+            index -= 1;
+            continue;
         }
-        ancestor = current.parent;
+
+        var found = false;
+        while (ancestor) |current| {
+            if (boundary != null and current == boundary.?) return false;
+            if (chain[index - 1].matches(current)) {
+                ancestor = current.parent;
+                found = true;
+                break;
+            }
+            ancestor = current.parent;
+        }
+        if (!found) return false;
+        index -= 1;
     }
     return true;
 }
@@ -418,4 +458,35 @@ test "next skips text nodes" {
     var next_node = try p.next();
     defer next_node.deinit();
     try std.testing.expectEqualStrings("span", next_node.get(0).?.tag);
+}
+
+test "child combinator matches direct children only" {
+    const allocator = std.testing.allocator;
+    const spec = comptime dsl.el("div", .{}, .{
+        dsl.el("section", .{}, .{
+            dsl.el("p", .{ .class = "direct" }, .{"direct"}),
+            dsl.el("article", .{}, .{
+                dsl.el("p", .{ .class = "nested" }, .{"nested"}),
+            }),
+        }),
+    });
+    const root = try dsl.render(allocator, spec);
+    defer freeTree(allocator, root);
+
+    var direct = try select(allocator, root, "section > p");
+    defer direct.deinit();
+    try std.testing.expectEqual(@as(usize, 1), direct.length());
+    try std.testing.expectEqualStrings("direct", direct.get(0).?.attr("class").?);
+
+    var nested = try select(allocator, root, "section>article > p");
+    defer nested.deinit();
+    try std.testing.expectEqual(@as(usize, 1), nested.length());
+
+    var not_direct = try select(allocator, root, "section > article > p");
+    defer not_direct.deinit();
+    try std.testing.expectEqual(@as(usize, 1), not_direct.length());
+
+    var rejected = try select(allocator, root, "section > p.nested");
+    defer rejected.deinit();
+    try std.testing.expectEqual(@as(usize, 0), rejected.length());
 }

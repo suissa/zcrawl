@@ -128,12 +128,19 @@ fn runTestFile(file_path: []const u8) !void {
             const initial_states = initial_states_obj.array;
             for (initial_states.items) |initial_state_val| {
                 std.debug.print("------------------\nwith initial state: {s}\n------------------\n", .{initial_state_val.string});
-                try runTest(arena_allocator, input, expected_tokens.items, expected_errors.items, parseInitialState(initial_state_val.string).?);
+                runTest(arena_allocator, input, expected_tokens.items, expected_errors.items, parseInitialState(initial_state_val.string).?) catch |err| {
+                    std.debug.print("FAIL html5lib file={s} case={d} description={s} error={s} input={s}\n", .{ file_path, i, description, @errorName(err), input });
+                    return err;
+                };
             }
         } else {
-            try runTest(arena_allocator, input, expected_tokens.items, expected_errors.items, null);
+            runTest(arena_allocator, input, expected_tokens.items, expected_errors.items, null) catch |err| {
+                std.debug.print("FAIL html5lib file={s} case={d} description={s} error={s} input={s}\n", .{ file_path, i, description, @errorName(err), input });
+                return err;
+            };
         }
     }
+    std.debug.print("Completed html5lib file: {s}\n", .{file_path});
 }
 
 fn runTest(allocator: std.mem.Allocator, input: []const u8, expected_tokens: []Token, expected_errors: []ErrorInfo, initial_state: ?Tokenizer.State) !void {
@@ -172,8 +179,14 @@ fn runTest(allocator: std.mem.Allocator, input: []const u8, expected_tokens: []T
         try expectEqualTokens(expected_token, token);
         num_tokens += 1;
     }
-    try testing.expectEqual(expected_tokens.len, num_tokens);
-    try testing.expectEqual(expected_errors.len, num_errors);
+    if (expected_tokens.len != num_tokens) {
+        std.debug.print("FAIL token count: expected={d}, actual={d}, input={s}\n", .{ expected_tokens.len, num_tokens, input });
+        return error.TestUnexpectedResult;
+    }
+    if (expected_errors.len != num_errors) {
+        std.debug.print("FAIL parse-error count: expected={d}, actual={d}, input={s}\n", .{ expected_errors.len, num_errors, input });
+        return error.TestUnexpectedResult;
+    }
 }
 
 fn parseOutput(allocator: std.mem.Allocator, outputs: std.json.Array) !std.array_list.Managed(Token) {

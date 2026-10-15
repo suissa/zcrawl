@@ -112,8 +112,6 @@ fn runTestFile(file_path: []const u8) !void {
         };
         defer expected_errors.deinit();
 
-        if (expected_errors.items.len > 0) {            for (expected_errors.items) |expected_error| {            }
-        }
         if (test_obj.object.get("initialStates")) |initial_states_obj| {
             const initial_states = initial_states_obj.array;
             for (initial_states.items) |initial_state_val| {                runTest(arena_allocator, input, expected_tokens.items, expected_errors.items, parseInitialState(initial_state_val.string).?) catch |err| {

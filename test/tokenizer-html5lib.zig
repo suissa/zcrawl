@@ -1,8 +1,9 @@
 const std = @import("std");
 const testing = std.testing;
-const Token = @import("token.zig").Token;
-const Tokenizer = @import("tokenizer").Tokenizer;
-const ParseError = @import("parse_error.zig").ParseError;
+const zhtml = @import("zhtml");
+const Token = zhtml.Token;
+const Tokenizer = zhtml.Tokenizer;
+const ParseError = zhtml.ParseError;
 
 // FIXME: This whole file is rather sloppy with memory
 // TODO: Preprocessing the input stream (spec 12.2.3.5)
@@ -95,15 +96,11 @@ fn runTestFile(file_path: []const u8) !void {
         const description = test_obj.object.get("description").?.string;
         for (ignored_tests) |ignored_test| {
             if (std.mem.eql(u8, description, ignored_test)) {
-                std.log.warn("Ignoring test '{s}'\n", .{description});
                 continue :outer;
             }
         }
 
-        const input = test_obj.object.get("input").?.string;
-        std.debug.print("\n===================\n{}: {s}\n", .{ i, description });
-        std.debug.print("\n{s}\n", .{input});
-        const expected_tokens = try parseOutput(arena_allocator, test_obj.object.get("output").?.array);
+        const input = test_obj.object.get("input").?.string;        const expected_tokens = try parseOutput(arena_allocator, test_obj.object.get("output").?.array);
         defer expected_tokens.deinit();
 
         const expected_errors = blk: {
@@ -115,19 +112,11 @@ fn runTestFile(file_path: []const u8) !void {
         };
         defer expected_errors.deinit();
 
-        if (expected_errors.items.len > 0) {
-            std.debug.print("\nexpected errors:\n", .{});
-            for (expected_errors.items) |expected_error| {
-                std.debug.print("  {}\n", .{expected_error});
-            }
-        }
-        std.debug.print("===================\n", .{});
-
+        if (expected_errors.items.len > 0) {            for (expected_errors.items) |expected_error| {            }
+        }
         if (test_obj.object.get("initialStates")) |initial_states_obj| {
             const initial_states = initial_states_obj.array;
-            for (initial_states.items) |initial_state_val| {
-                std.debug.print("------------------\nwith initial state: {s}\n------------------\n", .{initial_state_val.string});
-                runTest(arena_allocator, input, expected_tokens.items, expected_errors.items, parseInitialState(initial_state_val.string).?) catch |err| {
+            for (initial_states.items) |initial_state_val| {                runTest(arena_allocator, input, expected_tokens.items, expected_errors.items, parseInitialState(initial_state_val.string).?) catch |err| {
                     std.debug.print("FAIL html5lib file={s} case={d} description={s} error={s} input={s}\n", .{ file_path, i, description, @errorName(err), input });
                     return err;
                 };
@@ -139,7 +128,6 @@ fn runTestFile(file_path: []const u8) !void {
             };
         }
     }
-    std.debug.print("Completed html5lib file: {s}\n", .{file_path});
 }
 
 fn runTest(allocator: std.mem.Allocator, input: []const u8, expected_tokens: []Token, expected_errors: []ErrorInfo, initial_state: ?Tokenizer.State) !void {
@@ -151,10 +139,7 @@ fn runTest(allocator: std.mem.Allocator, input: []const u8, expected_tokens: []T
     var num_tokens: usize = 0;
     var num_errors: usize = 0;
     while (true) {
-        const token = tokenizer.nextToken() catch |err| {
-            std.debug.print("expected error: {} at line: {}, column: {}\n", .{ err, tokenizer.line, tokenizer.column });
-            try testing.expect(expected_errors.len > 0);
-            var error_found = false;
+        const token = tokenizer.nextToken() catch |err| {            var error_found = false;
             const id = ErrorInfo.errorToSpecId(err);
             for (expected_errors) |expected_error| {
                 // TODO: Compare line number and column number; the html5lib tests don't seem to be consistent
@@ -164,7 +149,10 @@ fn runTest(allocator: std.mem.Allocator, input: []const u8, expected_tokens: []T
                     break;
                 }
             }
-            try testing.expect(error_found);
+            if (!error_found) {
+                std.debug.print("FAIL unexpected tokenizer error={s} line={d} column={d} input={s}\n", .{ @errorName(err), tokenizer.line, tokenizer.column, input });
+                return error.TestUnexpectedResult;
+            }
             num_errors += 1;
             continue;
         };
@@ -174,8 +162,10 @@ fn runTest(allocator: std.mem.Allocator, input: []const u8, expected_tokens: []T
 
         try testing.expect(num_tokens < expected_tokens.len);
         const expected_token = expected_tokens[num_tokens];
-        std.debug.print("expected: {}\nactual:   {}\n\n", .{ expected_token, token });
-        try expectEqualTokens(expected_token, token);
+        expectEqualTokens(expected_token, token) catch |err| {
+            std.debug.print("FAIL token mismatch input={s}\nexpected: {}\nactual:   {}\n", .{ input, expected_token, token });
+            return err;
+        };
         num_tokens += 1;
     }
     if (expected_tokens.len != num_tokens) {
@@ -397,8 +387,5 @@ const ErrorInfo = struct {
 };
 
 test "ErrorInfo.errorToSpecId" {
-    const actual = ErrorInfo.errorToSpecId(ParseError.EofInDOCTYPE);
-    std.debug.print("ErrorInfo.errorToSpecId: expected=eof-in-doctype actual={s}\n", .{actual});
-    try testing.expectEqualSlices(u8, "eof-in-doctype", actual);
-    std.debug.print("Completed ErrorInfo.errorToSpecId\n", .{});
+    try testing.expectEqualSlices(u8, "eof-in-doctype", ErrorInfo.errorToSpecId(ParseError.EofInDOCTYPE));
 }

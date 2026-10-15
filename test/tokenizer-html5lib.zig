@@ -398,5 +398,8 @@ const ErrorInfo = struct {
 };
 
 test "ErrorInfo.errorToSpecId" {
-    try testing.expectEqualSlices(u8, "eof-in-doctype", ErrorInfo.errorToSpecId(ParseError.EofInDOCTYPE));
+    const actual = ErrorInfo.errorToSpecId(ParseError.EofInDOCTYPE);
+    std.debug.print("ErrorInfo.errorToSpecId: expected=eof-in-doctype actual={s}\\n", .{actual});
+    try testing.expectEqualSlices(u8, "eof-in-doctype", actual);
+    std.debug.print("Completed ErrorInfo.errorToSpecId\\n", .{});
 }
